@@ -13,34 +13,48 @@ struct Point: Hashable {
 }
 
 
-class Map {
-    let rows: Int
-    let cols: Int
-    let walls: Set<Point>
-    let start: Point
-    let goal: Point
+class Map: ObservableObject{
+    @Published var rows: Int
+    @Published var cols: Int
+    @Published var walls: Set<Point>
+    @Published var start: Point = Point(x: 0, y: 0)
+    @Published var goal: Point
     
-    init(rows: Int, cols: Int, walls: Set<Point>, start: Point, goal: Point) {
+    @Published var path: [Point] = []
+    
+    // Keeps track of where we came from:
+    // cameFrom[point] = previousPoint
+    // Used later to reconstruct the path once we reach the goal.
+    @Published var cameFrom: [Point: Point] = [:]
+    
+    // gScore[point] = cost of the cheapest path found so far from start → point
+    @Published var gScore: [Point: Float] = [Point(x: 0, y: 0) : 0]
+    // Nodes to explore (the "open set"). Start from the start point.
+    @Published var openSet: Set<Point> = [Point(x: 0, y: 0)]
+    
+    @Published var slowDownSec: Double = 1
+    
+    @Published var currentCheckPoint: Point? = nil
+    
+    init(rows: Int, cols: Int, walls: Set<Point>, goal: Point) {
         self.rows = rows
         self.cols = cols
         self.walls = walls
-        self.start = start
         self.goal = goal
     }
     
     
-    
-    func findPath() -> [Point]? {
-        // Nodes to explore (the "open set"). Start from the start point.
-        var openSet: Set<Point> = [start]
+    @MainActor
+    func findPath() async {
+        path.removeAll()
+        cameFrom.removeAll()
+        gScore = [Point(x: 0, y: 0) : 0]
+        openSet = [Point(x: 0, y: 0)]
+       
         
-        // Keeps track of where we came from:
-        // cameFrom[point] = previousPoint
-        // Used later to reconstruct the path once we reach the goal.
-        var cameFrom: [Point: Point] = [:]
         
-        // gScore[point] = cost of the cheapest path found so far from start → point
-        var gScore: [Point: Float] = [start: 0]
+        
+       
         
         // fScore[point] = estimated total cost from start → point → goal
         // = gScore[point] + heuristic(point, goal)
@@ -53,14 +67,24 @@ class Map {
         
         // Main A* loop
         while !openSet.isEmpty {
+            try? await Task.sleep(for: .seconds(slowDownSec))
+
             // Pick the node in openSet with the lowest fScore
-            guard let currentCheckPoint = openSet.min(by: hasLowerFScore) else {
+            currentCheckPoint = openSet.min(by: hasLowerFScore)
+            guard let currentCheckPoint else {
                 break // Should never happen since openSet is not empty, but safe guard.
             }
             
 
             if currentCheckPoint == goal {
-                return reconstructPath(cameFrom: cameFrom, current: currentCheckPoint)
+                
+                let resultPath = reconstructPath(cameFrom: cameFrom, current: currentCheckPoint)
+                
+                for p in resultPath {
+                    try? await Task.sleep(for: .seconds(slowDownSec))
+                    path.append(p)
+                }
+                return
             }
             
             // Mark this node as processed (remove from open set)
@@ -93,9 +117,6 @@ class Map {
                 }
             }
         }
-        
-        // If open set is empty and goal not reached → no path exists
-        return nil
     }
 
     
@@ -108,7 +129,8 @@ class Map {
             path.append(prevPoint)
             temp = prevPoint
         }
-        return path.reversed() // Reverse to get start → goal
+        return path
+//        return path.reversed() // Reverse to get start → goal
     }
 
     
@@ -171,82 +193,499 @@ extension Map {
 
 
 struct ContentView: View {
+    @StateObject private var mapModel = Map(
+        rows: 30,
+        cols: 30,
+        walls: Set<Point>([
+            Point(x: 1, y: 9),
+            Point(x: 7, y: 20),
+            Point(x: 29, y: 24),
+            Point(x: 14, y: 16),
+            Point(x: 16, y: 23),
+            Point(x: 5, y: 1),
+            Point(x: 26, y: 28),
+            Point(x: 21, y: 1),
+            Point(x: 18, y: 1),
+            Point(x: 22, y: 3),
+            Point(x: 9, y: 5),
+            Point(x: 22, y: 28),
+            Point(x: 4, y: 21),
+            Point(x: 17, y: 11),
+            Point(x: 7, y: 25),
+            Point(x: 9, y: 10),
+            Point(x: 21, y: 11),
+            Point(x: 21, y: 26),
+            Point(x: 25, y: 22),
+            Point(x: 12, y: 9),
+            Point(x: 13, y: 15),
+            Point(x: 26, y: 7),
+            Point(x: 11, y: 10),
+            Point(x: 27, y: 11),
+            Point(x: 1, y: 24),
+            Point(x: 17, y: 10),
+            Point(x: 11, y: 6),
+            Point(x: 25, y: 24),
+            Point(x: 23, y: 15),
+            Point(x: 10, y: 1),
+            Point(x: 9, y: 17),
+            Point(x: 11, y: 9),
+            Point(x: 17, y: 28),
+            Point(x: 4, y: 15),
+            Point(x: 20, y: 11),
+            Point(x: 27, y: 21),
+            Point(x: 25, y: 26),
+            Point(x: 1, y: 21),
+            Point(x: 10, y: 5),
+            Point(x: 25, y: 19),
+            Point(x: 21, y: 28),
+            Point(x: 25, y: 21),
+            Point(x: 27, y: 12),
+            Point(x: 10, y: 23),
+            Point(x: 25, y: 23),
+            Point(x: 28, y: 28),
+            Point(x: 5, y: 4),
+            Point(x: 12, y: 11),
+            Point(x: 14, y: 9),
+            Point(x: 12, y: 25),
+            Point(x: 1, y: 19),
+            Point(x: 13, y: 9),
+            Point(x: 26, y: 1),
+            Point(x: 17, y: 23),
+            Point(x: 17, y: 13),
+            Point(x: 5, y: 28),
+            Point(x: 27, y: 16),
+            Point(x: 10, y: 17),
+            Point(x: 17, y: 15),
+            Point(x: 18, y: 19),
+            Point(x: 22, y: 21),
+            Point(x: 27, y: 9),
+            Point(x: 17, y: 3),
+            Point(x: 4, y: 9),
+            Point(x: 17, y: 6),
+            Point(x: 9, y: 3),
+            Point(x: 20, y: 9),
+            Point(x: 9, y: 7),
+            Point(x: 5, y: 14),
+            Point(x: 13, y: 28),
+            Point(x: 11, y: 11),
+            Point(x: 12, y: 1),
+            Point(x: 20, y: 28),
+            Point(x: 12, y: 3),
+            Point(x: 24, y: 1),
+            Point(x: 11, y: 3),
+            Point(x: 8, y: 15),
+            Point(x: 4, y: 28),
+            Point(x: 19, y: 19),
+            Point(x: 8, y: 1),
+            Point(x: 7, y: 9),
+            Point(x: 25, y: 20),
+            Point(x: 6, y: 3),
+            Point(x: 9, y: 1),
+            Point(x: 10, y: 13),
+            Point(x: 14, y: 28),
+            Point(x: 27, y: 13),
+            Point(x: 17, y: 9),
+            Point(x: 5, y: 21),
+            Point(x: 17, y: 19),
+            Point(x: 15, y: 20),
+            Point(x: 12, y: 28),
+            Point(x: 8, y: 4),
+            Point(x: 9, y: 21),
+            Point(x: 16, y: 1),
+            Point(x: 12, y: 23),
+            Point(x: 24, y: 11),
+            Point(x: 3, y: 19),
+            Point(x: 6, y: 4),
+            Point(x: 8, y: 9),
+            Point(x: 5, y: 25),
+            Point(x: 21, y: 21),
+            Point(x: 2, y: 9),
+            Point(x: 13, y: 3),
+            Point(x: 28, y: 9),
+            Point(x: 23, y: 9),
+            Point(x: 6, y: 21),
+            Point(x: 3, y: 1),
+            Point(x: 1, y: 7),
+            Point(x: 19, y: 1),
+            Point(x: 11, y: 15),
+            Point(x: 25, y: 28),
+            Point(x: 7, y: 21),
+            Point(x: 20, y: 1),
+            Point(x: 28, y: 21),
+            Point(x: 15, y: 12),
+            Point(x: 7, y: 4),
+            Point(x: 13, y: 13),
+            Point(x: 7, y: 19),
+            Point(x: 6, y: 1),
+            Point(x: 11, y: 14),
+            Point(x: 15, y: 14),
+            Point(x: 2, y: 28),
+            Point(x: 22, y: 17),
+            Point(x: 20, y: 15),
+            Point(x: 20, y: 7),
+            Point(x: 13, y: 25),
+            Point(x: 13, y: 16),
+            Point(x: 15, y: 26),
+            Point(x: 28, y: 13),
+            Point(x: 12, y: 15),
+            Point(x: 10, y: 15),
+            Point(x: 15, y: 1),
+            Point(x: 19, y: 25),
+            Point(x: 9, y: 9),
+            Point(x: 3, y: 17),
+            Point(x: 1, y: 14),
+            Point(x: 23, y: 17),
+            Point(x: 8, y: 3),
+            Point(x: 1, y: 12),
+            Point(x: 18, y: 21),
+            Point(x: 11, y: 1),
+            Point(x: 27, y: 28),
+            Point(x: 17, y: 1),
+            Point(x: 13, y: 23),
+            Point(x: 29, y: 8),
+            Point(x: 17, y: 14),
+            Point(x: 14, y: 7),
+            Point(x: 19, y: 7),
+            Point(x: 11, y: 13),
+            Point(x: 27, y: 26),
+            Point(x: 27, y: 7),
+            Point(x: 5, y: 19),
+            Point(x: 20, y: 26),
+            Point(x: 20, y: 13),
+            Point(x: 19, y: 9),
+            Point(x: 2, y: 21),
+            Point(x: 21, y: 23),
+            Point(x: 13, y: 1),
+            Point(x: 9, y: 13),
+            Point(x: 26, y: 15),
+            Point(x: 7, y: 28),
+            Point(x: 27, y: 5),
+            Point(x: 5, y: 6),
+            Point(x: 28, y: 17),
+            Point(x: 28, y: 3),
+            Point(x: 29, y: 25),
+            Point(x: 26, y: 9),
+            Point(x: 25, y: 15),
+            Point(x: 24, y: 9),
+            Point(x: 23, y: 18),
+            Point(x: 6, y: 17),
+            Point(x: 0, y: 3),
+            Point(x: 17, y: 22),
+            Point(x: 29, y: 7),
+            Point(x: 25, y: 18),
+            Point(x: 19, y: 3),
+            Point(x: 2, y: 5),
+            Point(x: 25, y: 4),
+            Point(x: 11, y: 19),
+            Point(x: 1, y: 13),
+            Point(x: 19, y: 26),
+            Point(x: 15, y: 28),
+            Point(x: 25, y: 9),
+            Point(x: 24, y: 28),
+            Point(x: 15, y: 16),
+            Point(x: 14, y: 3),
+            Point(x: 10, y: 19),
+            Point(x: 4, y: 17),
+            Point(x: 13, y: 12),
+            Point(x: 15, y: 25),
+            Point(x: 16, y: 13),
+            Point(x: 17, y: 7),
+            Point(x: 12, y: 21),
+            Point(x: 15, y: 23),
+            Point(x: 21, y: 7),
+            Point(x: 27, y: 15),
+            Point(x: 8, y: 25),
+            Point(x: 17, y: 16),
+            Point(x: 10, y: 25),
+            Point(x: 8, y: 17),
+            Point(x: 26, y: 21),
+            Point(x: 22, y: 26),
+            Point(x: 16, y: 16),
+            Point(x: 25, y: 6),
+            Point(x: 21, y: 19),
+            Point(x: 18, y: 3),
+            Point(x: 12, y: 17),
+            Point(x: 1, y: 11),
+            Point(x: 26, y: 24),
+            Point(x: 24, y: 21),
+            Point(x: 18, y: 26),
+            Point(x: 27, y: 17),
+            Point(x: 5, y: 9),
+            Point(x: 23, y: 26),
+            Point(x: 1, y: 15),
+            Point(x: 23, y: 5),
+            Point(x: 21, y: 25),
+            Point(x: 18, y: 28),
+            Point(x: 11, y: 5),
+            Point(x: 4, y: 11),
+            Point(x: 9, y: 15),
+            Point(x: 3, y: 25),
+            Point(x: 1, y: 23),
+            Point(x: 23, y: 28),
+            Point(x: 28, y: 2),
+            Point(x: 22, y: 11),
+            Point(x: 9, y: 19),
+            Point(x: 27, y: 1),
+            Point(x: 1, y: 4),
+            Point(x: 25, y: 3),
+            Point(x: 3, y: 11),
+            Point(x: 2, y: 1),
+            Point(x: 25, y: 7),
+            Point(x: 3, y: 21),
+            Point(x: 17, y: 26),
+            Point(x: 25, y: 5),
+            Point(x: 11, y: 21),
+            Point(x: 17, y: 21),
+            Point(x: 18, y: 11),
+            Point(x: 1, y: 20),
+            Point(x: 26, y: 3),
+            Point(x: 20, y: 4),
+            Point(x: 23, y: 21),
+            Point(x: 19, y: 11),
+            Point(x: 7, y: 11),
+            Point(x: 18, y: 23),
+            Point(x: 9, y: 25),
+            Point(x: 15, y: 11),
+            Point(x: 3, y: 6),
+            Point(x: 3, y: 5),
+            Point(x: 29, y: 6),
+            Point(x: 26, y: 13),
+            Point(x: 5, y: 8),
+            Point(x: 19, y: 28),
+            Point(x: 5, y: 17),
+            Point(x: 1, y: 8),
+            Point(x: 7, y: 15),
+            Point(x: 5, y: 15),
+            Point(x: 0, y: 9),
+            Point(x: 21, y: 17),
+            Point(x: 4, y: 1),
+            Point(x: 28, y: 1),
+            Point(x: 28, y: 11),
+            Point(x: 11, y: 28),
+            Point(x: 9, y: 23),
+            Point(x: 26, y: 17),
+            Point(x: 18, y: 15),
+            Point(x: 23, y: 6),
+            Point(x: 23, y: 23),
+            Point(x: 14, y: 23),
+            Point(x: 11, y: 17),
+            Point(x: 15, y: 3),
+            Point(x: 25, y: 16),
+            Point(x: 4, y: 26),
+            Point(x: 21, y: 24),
+            Point(x: 25, y: 13),
+            Point(x: 23, y: 11),
+            Point(x: 21, y: 18),
+            Point(x: 15, y: 7),
+            Point(x: 23, y: 7),
+            Point(x: 7, y: 24),
+            Point(x: 15, y: 17),
+            Point(x: 23, y: 14),
+            Point(x: 7, y: 23),
+            Point(x: 6, y: 28),
+            Point(x: 21, y: 9),
+            Point(x: 28, y: 5),
+            Point(x: 7, y: 7),
+            Point(x: 19, y: 13),
+            Point(x: 7, y: 17),
+            Point(x: 11, y: 7),
+            Point(x: 17, y: 18),
+            Point(x: 19, y: 15),
+            Point(x: 5, y: 26),
+            Point(x: 21, y: 15),
+            Point(x: 23, y: 3),
+            Point(x: 18, y: 4),
+            Point(x: 26, y: 19),
+            Point(x: 6, y: 26),
+            Point(x: 4, y: 25),
+            Point(x: 18, y: 25),
+            Point(x: 2, y: 26),
+            Point(x: 15, y: 9),
+            Point(x: 10, y: 3),
+            Point(x: 22, y: 1),
+            Point(x: 11, y: 23),
+            Point(x: 29, y: 28),
+            Point(x: 13, y: 21),
+            Point(x: 24, y: 23),
+            Point(x: 3, y: 28),
+            Point(x: 1, y: 17),
+            Point(x: 1, y: 26),
+            Point(x: 25, y: 17),
+            Point(x: 19, y: 20),
+            Point(x: 1, y: 5),
+            Point(x: 14, y: 25),
+            Point(x: 29, y: 5),
+            Point(x: 24, y: 19),
+            Point(x: 24, y: 3),
+            Point(x: 29, y: 23),
+            Point(x: 10, y: 28),
+            Point(x: 4, y: 3),
+            Point(x: 4, y: 19),
+            Point(x: 25, y: 11),
+            Point(x: 26, y: 26),
+            Point(x: 7, y: 1),
+            Point(x: 1, y: 25),
+            Point(x: 2, y: 11),
+            Point(x: 5, y: 13),
+            Point(x: 19, y: 23),
+            Point(x: 8, y: 11),
+            Point(x: 10, y: 21),
+            Point(x: 26, y: 23),
+            Point(x: 0, y: 26),
+            Point(x: 12, y: 19),
+            Point(x: 2, y: 3),
+            Point(x: 2, y: 15),
+            Point(x: 16, y: 9),
+            Point(x: 24, y: 26),
+            Point(x: 16, y: 26),
+            Point(x: 15, y: 13),
+            Point(x: 15, y: 21),
+            Point(x: 9, y: 28),
+            Point(x: 3, y: 9),
+            Point(x: 6, y: 11),
+            Point(x: 24, y: 15),
+            Point(x: 13, y: 11),
+            Point(x: 13, y: 7),
+            Point(x: 7, y: 18),
+            Point(x: 8, y: 28),
+            Point(x: 22, y: 9),
+            Point(x: 25, y: 12),
+            Point(x: 28, y: 4),
+            Point(x: 3, y: 26),
+            Point(x: 8, y: 7),
+            Point(x: 1, y: 16),
+            Point(x: 6, y: 15),
+            Point(x: 21, y: 16),
+            Point(x: 23, y: 19),
+            Point(x: 11, y: 25),
+            Point(x: 21, y: 3),
+            Point(x: 17, y: 5),
+            Point(x: 6, y: 9),
+            Point(x: 23, y: 13),
+            Point(x: 16, y: 28),
+            Point(x: 4, y: 6),
+            Point(x: 1, y: 28),
+            Point(x: 23, y: 1),
+            Point(x: 3, y: 15),
+            Point(x: 16, y: 3),
+            Point(x: 15, y: 19),
+            Point(x: 18, y: 20),
+            Point(x: 15, y: 18),
+            Point(x: 5, y: 5),
+            Point(x: 5, y: 3),
+            Point(x: 17, y: 25),
+            Point(x: 29, y: 9),
+            Point(x: 10, y: 9),
+            Point(x: 14, y: 15),
+            Point(x: 13, y: 17),
+            Point(x: 25, y: 1),
+            Point(x: 1, y: 3),
+            Point(x: 8, y: 10),
+            Point(x: 20, y: 3),
+            Point(x: 14, y: 1),
+            Point(x: 7, y: 26)
+        ]),
+        goal: Point(x: 29, y: 29)
+    )
+    let screenWidth = UIViewController().view.bounds.width
+    let screenHeight = UIViewController().view.bounds.height
     
     var body: some View {
         VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+            Slider(value: $mapModel.slowDownSec, in: 0...1)
+            HStack {
+                Button {
+                    Task {
+                        await mapModel.findPath()
+                    }
+                } label: {
+                    Text("Start")
+                        .font(.largeTitle)
+                        .foregroundStyle(.red)
+                }
+                
+                Button {
+                    
+                    print("let walls = Set<Point>([")
+                    mapModel.walls.forEach({ print("Point(x: \($0.x), y: \($0.y)),") })
+                    print("])")
+                    
+                } label: {
+                    Text("Print map")
+                        .font(.largeTitle)
+                        .foregroundStyle(.red)
+                }
+            }
+            GeometryReader { geometry in
+                let screenWidth = geometry.size.width
+                let screenHeight = geometry.size.height
+                
+                VStack(spacing: 1) {
+                    ForEach(0..<mapModel.rows, id: \.self) { rowIndex in
+                        HStack(spacing: 1) {
+                            ForEach(0..<mapModel.cols, id: \.self) { colIndex in
+                                
+                                ZStack {
+                                    Rectangle()
+                                        .fill(cellColor(row: rowIndex, col: colIndex, mapModel: mapModel))
+                                        .frame(
+                                            width: screenWidth / CGFloat(mapModel.cols + 2),
+                                            height: screenHeight / CGFloat(mapModel.rows + 2)
+                                        )
+                                    
+                                    Text("\(mapModel.gScore[Point(x: colIndex, y: rowIndex), default: 0])")
+                                }
+                                .onTapGesture {
+                                    handleTap(row: rowIndex, col: colIndex)
+                                }
+
+                            }
+                        }
+                    }
+                    
+                    
+                }
+            }
         }
-        .padding()
-        .onAppear {
-            testAStarComplex()
+        .padding(.horizontal)
+
+    }
+    
+    
+    private func handleTap(row: Int, col: Int) {
+        if mapModel.walls.contains(where: { isSamePoint($0, Point(x: col, y: row)) }) {
+            mapModel.walls.remove(Point(x: col, y: row))
+        } else {
+            mapModel.walls.insert(Point(x: col, y: row))
         }
     }
     
-    func testAStar() {
-        let walls: Set<Point> = [
-            Point(x: 1, y: 1),
-            Point(x: 1, y: 2),
-            Point(x: 1, y: 3),
-            Point(x: 2, y: 3),
-            Point(x: 3, y: 3)
-        ]
-
-        let map = Map(
-            rows: 5,
-            cols: 5,
-            walls: walls,
-            start: Point(x: 0, y: 0),
-            goal: Point(x: 4, y: 4)
-        )
-
-        if let path = map.findPath() {
-            print("✅ Path found:\n")
-            map.printGrid(path: path)
+    func cellColor(row: Int, col: Int, mapModel: Map) -> Color {
+        let point = Point(x: col, y: row)
+        
+        if isSamePoint(mapModel.start, point) {
+            return .green
+        } else if isSamePoint(mapModel.goal, point) {
+            return .red
+        } else if mapModel.walls.contains(where: { isSamePoint($0, point) }) {
+            return .black
+        } else if mapModel.currentCheckPoint == point {
+            return .purple
+        } else if mapModel.path.contains(where: { isSamePoint($0, point) }) {
+            return .yellow
+        } else if mapModel.openSet.contains(where: { isSamePoint($0, point)}) {
+            return .orange
+        }  else if mapModel.cameFrom.keys.contains(point) {
+            return .blue
         } else {
-            print("❌ No path found.")
-            map.printGrid()
+            return .gray
         }
-
     }
+
     
-    func testAStarComplex() {
-        let walls: Set<Point> = [
-            // Vertical wall with a gap
-            Point(x: 1, y: 0), Point(x: 1, y: 1), Point(x: 1, y: 2), Point(x: 1, y: 3),
-            Point(x: 1, y: 5), Point(x: 1, y: 6), Point(x: 1, y: 7), Point(x: 1, y: 8), Point(x: 1, y: 9),
-            
-            // Horizontal wall
-            Point(x: 2, y: 5), Point(x: 3, y: 5), Point(x: 4, y: 5), Point(x: 5, y: 5), Point(x: 6, y: 5),
-            
-            // Another winding section
-            Point(x: 7, y: 1), Point(x: 7, y: 2), Point(x: 7, y: 3), Point(x: 7, y: 4),
-            Point(x: 7, y: 6), Point(x: 7, y: 7), Point(x: 7, y: 8),
-            
-            // Small block
-            Point(x: 4, y: 2), Point(x: 5, y: 2), Point(x: 6, y: 2)
-        ]
-        
-        let map = Map(
-            rows: 10,
-            cols: 10,
-            walls: walls,
-            start: Point(x: 0, y: 0),
-            goal: Point(x: 9, y: 9)
-        )
-        
-        if let path = map.findPath() {
-            print("✅ Path found:\n")
-            map.printGrid(path: path)
-        } else {
-            print("❌ No path found.")
-            map.printGrid()
-        }
+    private func isSamePoint(_ p1: Point, _ p2: Point) -> Bool {
+        return p1.x == p2.x && p1.y == p2.y
     }
-
-
 }
 
 #Preview {
