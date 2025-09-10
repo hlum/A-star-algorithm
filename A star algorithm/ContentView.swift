@@ -653,38 +653,34 @@ struct ContentView: View {
     
     
     private func handleTap(row: Int, col: Int) {
-        if mapModel.walls.contains(where: { isSamePoint($0, Point(x: col, y: row)) }) {
-            mapModel.walls.remove(Point(x: col, y: row))
+        let tappedPoint = Point(x: col, y: row)
+        if mapModel.walls.contains(where: { $0 == tappedPoint }) {
+            mapModel.walls.remove(tappedPoint)
         } else {
-            mapModel.walls.insert(Point(x: col, y: row))
+            mapModel.walls.insert(tappedPoint)
         }
     }
     
     func cellColor(row: Int, col: Int, mapModel: Map) -> Color {
         let point = Point(x: col, y: row)
         
-        if isSamePoint(mapModel.start, point) {
+        if mapModel.start == point {
             return .green
-        } else if isSamePoint(mapModel.goal, point) {
+        } else if mapModel.goal == point {
             return .red
-        } else if mapModel.walls.contains(where: { isSamePoint($0, point) }) {
+        } else if mapModel.walls.contains(where: { $0 == point }) {
             return .black
         } else if mapModel.currentCheckPoint == point {
             return .purple
-        } else if mapModel.path.contains(where: { isSamePoint($0, point) }) {
+        } else if mapModel.path.contains(where: { $0 == point }) {
             return .yellow
-        } else if mapModel.openSet.contains(where: { isSamePoint($0, point)}) {
+        } else if mapModel.openSet.contains(where: { $0 == point}) {
             return .orange
         }  else if mapModel.cameFrom.keys.contains(point) {
             return .blue
         } else {
             return .gray
         }
-    }
-
-    
-    private func isSamePoint(_ p1: Point, _ p2: Point) -> Bool {
-        return p1.x == p2.x && p1.y == p2.y
     }
 }
 
