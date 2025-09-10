@@ -591,7 +591,7 @@ struct ContentView: View {
     let screenHeight = UIViewController().view.bounds.height
     
     var body: some View {
-        VStack {
+        VStack(alignment: .center) {
             Slider(value: $mapModel.slowDownSec, in: 0...1)
             HStack {
                 Button {
@@ -645,9 +645,9 @@ struct ContentView: View {
                     
                     
                 }
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding(.horizontal)
 
     }
     
@@ -671,13 +671,14 @@ struct ContentView: View {
         } else if mapModel.walls.contains(where: { $0 == point }) {
             return .black
         } else if mapModel.currentCheckPoint == point {
-            return .purple
+            return .red
         } else if mapModel.path.contains(where: { $0 == point }) {
             return .yellow
         } else if mapModel.openSet.contains(where: { $0 == point}) {
             return .orange
         }  else if mapModel.cameFrom.keys.contains(point) {
             return .blue
+
         } else {
             return .gray
         }
